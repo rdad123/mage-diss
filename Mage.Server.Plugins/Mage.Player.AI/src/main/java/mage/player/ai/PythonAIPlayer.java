@@ -37,6 +37,11 @@ public class PythonAIPlayer extends ComputerPlayer {
                 int myLife = myPlayer.getLife();
                 int turnNumber = game.getTurnNum();
 
+                boolean isMyTurn = game.isActivePlayer(this.playerId);
+
+                // Tell Python if it is the Main Phase (Stack is empty, legal to play lands/creatures)
+                boolean isMainPhase = game.canPlaySorcery(this.playerId);
+
                 // 1. Get Opponents
                 StringBuilder opponentsJson = new StringBuilder("[");
                 boolean firstOpponent = true;
@@ -55,12 +60,11 @@ public class PythonAIPlayer extends ComputerPlayer {
                 }
                 opponentsJson.append("]");
 
-                // 2. Get My Hand (Need IDs to cast them later!)
+                // 2. Get My Hand
                 StringBuilder handJson = new StringBuilder("[");
                 boolean firstCard = true;
                 for (mage.cards.Card card : myPlayer.getHand().getCards(game)) {
                     if (!firstCard) handJson.append(", ");
-                    // We must escape quotes in card names just in case!
                     String safeName = card.getName().replace("\"", "\\\"");
                     handJson.append(String.format(
                             "{\"id\": \"%s\", \"name\": \"%s\"}",
@@ -70,7 +74,7 @@ public class PythonAIPlayer extends ComputerPlayer {
                 }
                 handJson.append("]");
 
-                // 3. Get My Battlefield (Lands, Creatures, etc.)
+                // 3. Get My Battlefield
                 StringBuilder fieldJson = new StringBuilder("[");
                 boolean firstPerm = true;
                 for (mage.game.permanent.Permanent perm : game.getBattlefield().getAllActivePermanents(this.playerId)) {
@@ -84,23 +88,65 @@ public class PythonAIPlayer extends ComputerPlayer {
                 }
                 fieldJson.append("]");
 
-                // 4. Combine into final massive JSON string
+                // 4. Send JSON Payload
                 String gameStateJson = String.format(
-                        "{\"turn\": %d, \"my_life\": %d, \"opponents\": %s, \"my_hand\": %s, \"my_battlefield\": %s}",
-                        turnNumber, myLife, opponentsJson.toString(), handJson.toString(), fieldJson.toString()
+                        "{\"turn\": %d, \"is_my_turn\": %b, \"is_main_phase\": %b, \"my_life\": %d, \"opponents\": %s, \"my_hand\": %s, \"my_battlefield\": %s}",
+                        turnNumber, isMyTurn, isMainPhase, myLife, opponentsJson.toString(), handJson.toString(), fieldJson.toString()
                 );
-
-                // 5. Send it
                 out.println(gameStateJson);
+
             }
 
+            //start listening for python response
             String response = in.readLine();
-            socket.close();
+            socket.close(); // Hang up the phone
+
+            if (response != null && response.startsWith("PLAY:")) {
+                String idString = response.substring(5).trim();
+                try {
+                    java.util.UUID cardId = java.util.UUID.fromString(idString);
+                    mage.cards.Card cardToPlay = game.getCard(cardId);
+
+                    if (cardToPlay != null) {
+                        System.out.println("DEBUG: Found the card object: " + cardToPlay.getName());
+
+                        boolean inHand = myPlayer.getHand().contains(cardId);
+                        System.out.println("DEBUG: Is it in my hand? " + inHand);
+
+                        boolean isLand = cardToPlay.isLand(game);
+                        System.out.println("DEBUG: Is it a land? " + isLand);
+
+                        boolean canPlayLand = myPlayer.canPlayLand();
+                        System.out.println("DEBUG: Has myPlayer hit their land drop limit? " + !canPlayLand);
+
+                        boolean isMainPhase = game.canPlaySorcery(myPlayer.getId());
+                        System.out.println("DEBUG: Is it the Main Phase? " + isMainPhase);
+
+                        if (inHand && isLand && canPlayLand && isMainPhase) {
+                            System.out.println("DEBUG: All checks passed. Attempting playLand...");
+                            boolean success = myPlayer.playLand(cardToPlay, game, false);
+                            System.out.println("DEBUG: Did the engine execute it? " + success);
+
+                            if (success) {
+                                return true;
+                            }
+                        } else {
+                            System.out.println("DEBUG: One of the checks failed. Skipping playLand.");
+                        }
+                    } else {
+                        System.out.println("DEBUG: Failed to find a card with ID: " + idString);
+                    }
+                } catch (Exception ex) {
+                    System.out.println("ERROR: Something crashed during the play check. " + ex.getMessage());
+                }
+            }
+            // ========================================================
 
         } catch (Exception e) {
             System.out.println("Failed to connect to Python.");
         }
 
+        // If Python sends "PASS" or fails, fall back to default AI
         return super.priority(game);
     }
 }
