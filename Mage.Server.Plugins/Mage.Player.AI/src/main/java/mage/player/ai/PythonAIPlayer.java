@@ -47,15 +47,15 @@ public class PythonAIPlayer extends ComputerPlayer {
                         mage.players.Player opponent = game.getPlayer(currentId);
                         if (opponent != null) {
                             if (!firstOpponent) opponentsJson.append(", ");
-                            opponentsJson.append(String.format("{\"name\": \"%s\", \"life\": %d, \"hand_size\": %d}",
-                                    opponent.getName(), opponent.getLife(), opponent.getHand().size()));
+                            opponentsJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"life\": %d, \"hand_size\": %d}",
+                                    opponent.getId().toString(), opponent.getName(), opponent.getLife(), opponent.getHand().size()));
                             firstOpponent = false;
                         }
                     }
                 }
                 opponentsJson.append("]");
 
-                // 2. Get My Hand (NEW: Asking Java for the exact integer CMC!)
+                // 2. Get My Hand (NEW: Added "needs_target" check!)
                 StringBuilder handJson = new StringBuilder("[");
                 boolean firstCard = true;
                 for (mage.cards.Card card : myPlayer.getHand().getCards(game)) {
@@ -63,16 +63,20 @@ public class PythonAIPlayer extends ComputerPlayer {
                     String safeName = card.getName().replace("\"", "\\\"");
 
                     boolean canCast = false;
+                    boolean needsTarget = false;
+
                     if (card.getSpellAbility() != null) {
                         canCast = card.getSpellAbility().canActivate(this.playerId, game).canActivate();
+                        // Check if the spell requires a target to be cast!
+                        if (!card.getSpellAbility().getTargets().isEmpty()) {
+                            needsTarget = true;
+                        }
                     }
 
-                    // getManaValue() returns the exact integer cost (e.g. 6 for Time Stop)
-                    // Note: If your version throws an error here, change it to card.getConvertedManaCost()
                     int cmc = card.getManaValue();
 
-                    handJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"can_cast\": %b, \"cmc\": %d}",
-                            card.getId().toString(), safeName, canCast, cmc));
+                    handJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"can_cast\": %b, \"cmc\": %d, \"needs_target\": %b}",
+                            card.getId().toString(), safeName, canCast, cmc, needsTarget));
                     firstCard = false;
                 }
                 handJson.append("]");
@@ -83,54 +87,72 @@ public class PythonAIPlayer extends ComputerPlayer {
                 for (mage.game.permanent.Permanent perm : game.getBattlefield().getAllActivePermanents(this.playerId)) {
                     if (!firstPerm) fieldJson.append(", ");
                     String safeName = perm.getName().replace("\"", "\\\"");
-                    fieldJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"tapped\": %b, \"power\": %d, \"toughness\": %d}",
-                            perm.getId().toString(), safeName, perm.isTapped(), perm.getPower().getValue(), perm.getToughness().getValue()));
+                    fieldJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"tapped\": %b}",
+                            perm.getId().toString(), safeName, perm.isTapped()));
                     firstPerm = false;
                 }
                 fieldJson.append("]");
 
-                // 4. Send JSON Payload
-                String gameStateJson = String.format("{\"request_type\": \"priority\", \"turn\": %d, \"is_my_turn\": %b, \"is_main_phase\": %b, \"my_life\": %d, \"opponents\": %s, \"my_hand\": %s, \"my_battlefield\": %s}",
-                        turnNumber, isMyTurn, isMainPhase, myLife, opponentsJson.toString(), handJson.toString(), fieldJson.toString());
+                // 4. Get Opponent's Battlefield (NEW: The Radar!)
+                StringBuilder oppFieldJson = new StringBuilder("[");
+                boolean firstOppPerm = true;
+                for (mage.game.permanent.Permanent perm : game.getBattlefield().getAllActivePermanents()) {
+                    // If we do NOT control it, it belongs to the enemy
+                    if (!perm.getControllerId().equals(this.playerId)) {
+                        if (!firstOppPerm) oppFieldJson.append(", ");
+                        String safeName = perm.getName().replace("\"", "\\\"");
+                        oppFieldJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\"}",
+                                perm.getId().toString(), safeName));
+                        firstOppPerm = false;
+                    }
+                }
+                oppFieldJson.append("]");
+
+                // 5. Send Massive JSON Payload
+                String gameStateJson = String.format("{\"request_type\": \"priority\", \"turn\": %d, \"is_my_turn\": %b, \"is_main_phase\": %b, \"my_life\": %d, \"opponents\": %s, \"my_hand\": %s, \"my_battlefield\": %s, \"opp_battlefield\": %s}",
+                        turnNumber, isMyTurn, isMainPhase, myLife, opponentsJson.toString(), handJson.toString(), fieldJson.toString(), oppFieldJson.toString());
                 out.println(gameStateJson);
 
-                // 5. Wait for Python response
+                // 6. Wait for Python response
                 String response = in.readLine();
                 socket.close();
 
-                // 6. Process Python's Action
+                // 7. Process Python's Action
                 if (response != null && response.startsWith("PLAY:")) {
                     String idString = response.substring(5).trim();
                     try {
                         mage.cards.Card cardToPlay = game.getCard(java.util.UUID.fromString(idString));
                         if (cardToPlay != null && cardToPlay.isLand(game) && myPlayer.canPlayLand() && isMainPhase) {
-                            if (myPlayer.playLand(cardToPlay, game, false)) {
-                                return true;
-                            } else {
-                                myPlayer.pass(game); // SAFETY NET
-                            }
+                            if (myPlayer.playLand(cardToPlay, game, false)) return true;
+                            else myPlayer.pass(game);
                         }
                     } catch (Exception ex) {}
 
                 } else if (response != null && response.startsWith("CAST:")) {
-                    String idString = response.substring(5).trim();
+                    // NEW: Split the command to look for a target ID
+                    String[] parts = response.split(":");
                     try {
-                        mage.cards.Card cardToPlay = game.getCard(java.util.UUID.fromString(idString));
+                        java.util.UUID cardId = java.util.UUID.fromString(parts[1].trim());
+                        mage.cards.Card cardToPlay = game.getCard(cardId);
+
                         if (cardToPlay != null && cardToPlay.getSpellAbility() != null) {
                             System.out.println("DEBUG: Python attempting to cast: " + cardToPlay.getName());
 
-                            boolean success = myPlayer.activateAbility(cardToPlay.getSpellAbility(), game);
-                            System.out.println("DEBUG: Did the spell cast successfully? " + success);
+                            // If Python sent a 3rd piece of data, it's a target! Inject it!
+                            if (parts.length > 2) {
+                                java.util.UUID targetId = java.util.UUID.fromString(parts[2].trim());
+                                cardToPlay.getSpellAbility().getTargets().get(0).addTarget(targetId, cardToPlay.getSpellAbility(), game);
+                                System.out.println("DEBUG: Aiming at Target ID: " + targetId.toString());
+                            }
 
-                            if (success) {
-                                return true;
-                            } else {
-                                // THE FREEZE FIX: If the cast aborts (e.g. missing targets), safely pass!
-                                System.out.println("DEBUG: Cast aborted. Safely passing priority.");
+                            boolean success = myPlayer.activateAbility(cardToPlay.getSpellAbility(), game);
+                            if (success) return true;
+                            else {
+                                System.out.println("DEBUG: Cast aborted (likely invalid target). Passing.");
                                 myPlayer.pass(game);
                             }
                         }
-                    } catch (Exception ex) {}
+                    } catch (Exception ex) { myPlayer.pass(game); }
 
                 } else if (response != null && response.equals("PASS")) {
                     myPlayer.pass(game);
