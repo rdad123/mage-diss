@@ -2,12 +2,12 @@ package mage.player.ai;
 
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
-import mage.game.result.ResultProtos;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.UUID;
 
 public class PythonAIPlayer extends ComputerPlayer {
 
@@ -218,5 +218,74 @@ public class PythonAIPlayer extends ComputerPlayer {
             // Silently catch
         }
         return false;
+    }
+    @Override
+    public void selectAttackers(Game game, java.util.UUID attackingPlayerId) {
+        try {
+            Socket socket = new Socket("127.0.0.1", 5000);
+            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+            mage.players.Player myPlayer = game.getPlayer(this.playerId);
+
+            if (myPlayer != null) {
+                // 1. Get Opponents
+                StringBuilder opponentsJson = new StringBuilder("[");
+                boolean firstOpp = true;
+                for (java.util.UUID currentId : game.getPlayerList()) {
+                    if (!currentId.equals(this.playerId)) {
+                        if (!firstOpp) opponentsJson.append(", ");
+                        opponentsJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\"}",
+                                currentId.toString(), game.getPlayer(currentId).getName()));
+                        firstOpp = false;
+                    }
+                }
+                opponentsJson.append("]");
+
+                // 2. Get the Army
+                StringBuilder attackersJson = new StringBuilder("[");
+                boolean firstAttacker = true;
+                for (mage.game.permanent.Permanent perm : game.getBattlefield().getAllActivePermanents(this.playerId)) {
+                    if (perm.isCreature(game) && perm.canAttack(null, game)) {
+                        if (!firstAttacker) attackersJson.append(", ");
+                        String safeName = perm.getName().replace("\"", "\\\"");
+                        attackersJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"power\": %d}",
+                                perm.getId().toString(), safeName, perm.getPower().getValue()));
+                        firstAttacker = false;
+                    }
+                }
+                attackersJson.append("]");
+
+                // 3. Send Combat Payload
+                String gameStateJson = String.format("{\"request_type\": \"declare_attackers\", \"opponents\": %s, \"possible_attackers\": %s}",
+                        opponentsJson.toString(), attackersJson.toString());
+                out.println(gameStateJson);
+
+                // 4. Wait for Python
+                String response = in.readLine();
+                socket.close();
+
+                // 5. Execute
+                if (response != null && response.startsWith("ATTACK:")) {
+                    String payload = response.substring(7).trim();
+                    if (!payload.isEmpty()) {
+                        String[] attacks = payload.split(",");
+                        for (String attack : attacks) {
+                            String[] parts = attack.split(":");
+                            if (parts.length == 2) {
+                                java.util.UUID attackerId = java.util.UUID.fromString(parts[0].trim());
+                                java.util.UUID defenderId = java.util.UUID.fromString(parts[1].trim());
+                                myPlayer.declareAttacker(attackerId, defenderId, game, false);
+                                System.out.println("DEBUG: Declaring attacker ID " + attackerId);
+                            }
+                        }
+                    }
+                } else if (response != null && response.equals("PASS")) {
+                    System.out.println("DEBUG: Python chose not to attack.");
+                }
+            } else {
+                socket.close();
+            }
+        } catch (Exception e) {}
     }
 }
