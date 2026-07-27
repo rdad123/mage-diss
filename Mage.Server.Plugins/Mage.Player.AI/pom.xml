@@ -26,6 +26,16 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>org.mage</groupId>
+            <artifactId>mage-game-freeforall</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.mage</groupId>
+            <artifactId>mage-client</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>mage-sets</artifactId>
             <version>${project.version}</version>

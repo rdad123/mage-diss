@@ -14,14 +14,21 @@ public class PythonAIPlayer extends ComputerPlayer {
 
     public PythonAIPlayer(String name, RangeOfInfluence range, int skill) {
         super(name, range);
+        System.out.println("\n=================================");
+        System.out.println("BOT CONSTRUCTOR FIRING!");
+        System.out.println("=================================\n");
     }
 
     public PythonAIPlayer(final PythonAIPlayer player) {
         super(player);
+        System.out.println("\n=================================");
+        System.out.println("BOT CONSTRUCTOR FIRING!");
+        System.out.println("=================================\n");
     }
 
     @Override
     public PythonAIPlayer copy() {
+
         return new PythonAIPlayer(this);
     }
 
@@ -30,6 +37,7 @@ public class PythonAIPlayer extends ComputerPlayer {
     // ========================================================
     @Override
     public boolean chooseMulligan(Game game) {
+        System.out.println("PYTHON BOT: Auto-keeping opening hand!");
         try {
             Socket socket = new Socket("127.0.0.1", 5000);
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
@@ -170,10 +178,30 @@ public class PythonAIPlayer extends ComputerPlayer {
                 boolean firstPerm = true;
                 for (mage.game.permanent.Permanent perm : game.getBattlefield().getAllActivePermanents(this.playerId)) {
                     if (!firstPerm) fieldJson.append(", ");
-                    boolean isLand = perm.isLand(game); // NEW FLAG
+                    boolean isLand = perm.isLand(game);
 
-                    fieldJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"tapped\": %b, \"is_land\": %b}",
-                            perm.getId().toString(), perm.getName().replace("\"", "\\\""), perm.isTapped(), isLand));
+                    // --- Extract Activated Abilities ---
+                    StringBuilder abilitiesJson = new StringBuilder("[");
+                    boolean firstAb = true;
+                    for (mage.abilities.Ability ability : perm.getAbilities(game)) {
+                        if (ability instanceof mage.abilities.ActivatedAbility) {
+                            if (ability.getAbilityType() == mage.constants.AbilityType.ACTIVATED_NONMANA) {
+                                if (ability.getZone() == mage.constants.Zone.BATTLEFIELD) {
+                                    if (((mage.abilities.ActivatedAbility) ability).canActivate(this.playerId, game).canActivate()) {
+                                        if (!firstAb) abilitiesJson.append(", ");
+                                        String abName = ability.toString().replace("\"", "\\\"");
+                                        abilitiesJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\"}",
+                                                ability.getId().toString(), abName));
+                                        firstAb = false;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    abilitiesJson.append("]");
+
+                    fieldJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"tapped\": %b, \"is_land\": %b, \"abilities\": %s}",
+                            perm.getId().toString(), perm.getName().replace("\"", "\\\""), perm.isTapped(), isLand, abilitiesJson.toString()));
                     firstPerm = false;
                 }
                 fieldJson.append("]");
@@ -234,13 +262,39 @@ public class PythonAIPlayer extends ComputerPlayer {
                         }
                     } catch (Exception ex) { myPlayer.pass(game); }
 
+                } else if (response != null && response.startsWith("ACTIVATE:")) {
+                    String abilityIdStr = response.substring(9).trim();
+                    try {
+                        java.util.UUID abilityId = java.util.UUID.fromString(abilityIdStr);
+                        boolean activated = false;
+
+                        // Find the matching permanent and ability
+                        for (mage.game.permanent.Permanent perm : game.getBattlefield().getAllActivePermanents(this.playerId)) {
+                            for (mage.abilities.Ability ab : perm.getAbilities(game)) {
+                                if (ab.getId().equals(abilityId)) {
+                                    if (ab instanceof mage.abilities.ActivatedAbility) {
+                                        if (myPlayer.activateAbility((mage.abilities.ActivatedAbility) ab, game)) {
+                                            activated = true;
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                            if (activated) break;
+                        }
+                        if (activated) return true;
+                        else myPlayer.pass(game);
+                    } catch (Exception ex) { myPlayer.pass(game); }
+
                 } else if (response != null && response.equals("PASS")) {
                     myPlayer.pass(game);
                     try { Thread.sleep(50); } catch (Exception ignore) {}
                     return false;
                 }
             } else { socket.close(); }
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            System.err.println("PRIORITY SOCKET ERROR: " + e.getMessage());
+        }
 
         try { Thread.sleep(50); } catch (Exception ignore) {}
         return false;

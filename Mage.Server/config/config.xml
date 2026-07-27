@@ -36,7 +36,7 @@
     mailPassword        - passworf of the used user to send the mail
     mailFromAddress     - sender address
     -->
-    <server serverAddress="0.0.0.0"
+    <server serverAddress="127.0.0.1"
             serverName="mage-server"
             port="17171"
             secondaryBindPort="17179"
@@ -69,6 +69,7 @@
         <playerType name="Computer - mad" jar="mage-player-ai-ma.jar" className="mage.player.ai.ComputerPlayerControllableProxy"/>
         <playerType name="Computer - monte carlo" jar="mage-player-aimcts.jar" className="mage.player.ai.ComputerPlayerMCTS"/>
         <playerType name="Computer - Python API" jar="mage-player-ai-draft-bot.jar" className="mage.player.ai.PythonAIPlayer"/>
+        <playerType name="Computer - NFSP" jar="mage-player-ai-draft-bot.jar" className="mage.player.ai.PythonAIPlayerNFSP"/>
         <playerType name="Computer - draftbot" jar="mage-player-ai-draft-bot.jar" className="mage.player.ai.ComputerDraftPlayer"/>
     </playerTypes>
     <gameTypes>

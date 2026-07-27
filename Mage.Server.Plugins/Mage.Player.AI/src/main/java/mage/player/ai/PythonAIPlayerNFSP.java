@@ -1,6 +1,5 @@
 package mage.player.ai;
 
-import mage.constants.Outcome;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 
@@ -8,21 +7,23 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
-import java.util.UUID;
 
-public class PythonAIPlayer2 extends ComputerPlayer {
+public class PythonAIPlayerNFSP extends ComputerPlayer {
 
-    public PythonAIPlayer2(String name, RangeOfInfluence range, int skill) {
+    public PythonAIPlayerNFSP(String name, RangeOfInfluence range, int skill) {
+
         super(name, range);
     }
 
-    public PythonAIPlayer2(final PythonAIPlayer2 player) {
+    public PythonAIPlayerNFSP(final PythonAIPlayerNFSP player) {
+
         super(player);
     }
 
     @Override
-    public PythonAIPlayer2 copy() {
-        return new PythonAIPlayer2(this);
+    public PythonAIPlayerNFSP copy() {
+        return new PythonAIPlayerNFSP(this);
+
     }
 
     // ========================================================
@@ -44,11 +45,11 @@ public class PythonAIPlayer2 extends ComputerPlayer {
                     if (!firstCard) handJson.append(", ");
                     String safeName = card.getName().replace("\"", "\\\"");
 
-                    // NEW: Tell Python if it's a land during the mulligan phase!
                     boolean isLand = card.isLand(game);
+                    String denseFeatures = getDenseFeatures(card, game);
 
-                    handJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"is_land\": %b}",
-                            card.getId().toString(), safeName, isLand));
+                    handJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"is_land\": %b, %s}",
+                            card.getId().toString(), safeName, isLand, denseFeatures));
                     firstCard = false;
                 }
                 handJson.append("]");
@@ -156,11 +157,13 @@ public class PythonAIPlayer2 extends ComputerPlayer {
                             needsTarget = true;
                         }
                     }
-                    int cmc = card.getManaValue();
-                    boolean isLand = card.isLand(game); // NEW FLAG
+                    boolean isLand = card.isLand(game);
+                    String denseFeatures = getDenseFeatures(card, game); // CALL THE HELPER!
 
-                    handJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"can_cast\": %b, \"cmc\": %d, \"needs_target\": %b, \"is_land\": %b}",
-                            card.getId().toString(), safeName, canCast, cmc, needsTarget, isLand));
+                    // We removed 'cmc' from this format string because the helper method handles it now!
+                    // Notice the %s at the end to drop in the dense features.
+                    handJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"can_cast\": %b, \"needs_target\": %b, \"is_land\": %b, %s}",
+                            card.getId().toString(), safeName, canCast, needsTarget, isLand, denseFeatures));
                     firstCard = false;
                 }
                 handJson.append("]");
@@ -170,10 +173,37 @@ public class PythonAIPlayer2 extends ComputerPlayer {
                 boolean firstPerm = true;
                 for (mage.game.permanent.Permanent perm : game.getBattlefield().getAllActivePermanents(this.playerId)) {
                     if (!firstPerm) fieldJson.append(", ");
-                    boolean isLand = perm.isLand(game); // NEW FLAG
+                    boolean isLand = perm.isLand(game);
+                    String denseFeatures = getDenseFeatures(perm, game);
 
-                    fieldJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"tapped\": %b, \"is_land\": %b}",
-                            perm.getId().toString(), perm.getName().replace("\"", "\\\""), perm.isTapped(), isLand));
+                    StringBuilder abilitiesJson = new StringBuilder("[");
+                    boolean firstAb = true;
+                    for (mage.abilities.Ability ability : perm.getAbilities(game)) {
+                        // 1. Safe cast check
+                        if (ability instanceof mage.abilities.ActivatedAbility) {
+
+                            // 2. THE MASTER FILTER: Only accept non-mana activated abilities
+                            if (ability.getAbilityType() == mage.constants.AbilityType.ACTIVATED_NONMANA) {
+
+                                // 3. Ensure it's meant to be used from the battlefield
+                                if (ability.getZone() == mage.constants.Zone.BATTLEFIELD) {
+
+                                    // 4. Check if we actually have the mana/targets to activate it right now
+                                    if (((mage.abilities.ActivatedAbility) ability).canActivate(this.playerId, game).canActivate()) {
+                                        if (!firstAb) abilitiesJson.append(", ");
+                                        String abName = ability.toString().replace("\"", "\\\"");
+                                        abilitiesJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\"}",
+                                                ability.getId().toString(), abName));
+                                        firstAb = false;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    abilitiesJson.append("]");
+
+                    fieldJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"tapped\": %b, \"is_land\": %b, \"abilities\": %s, %s}",
+                            perm.getId().toString(), perm.getName().replace("\"", "\\\""), perm.isTapped(), isLand, abilitiesJson.toString(), denseFeatures));
                     firstPerm = false;
                 }
                 fieldJson.append("]");
@@ -184,14 +214,16 @@ public class PythonAIPlayer2 extends ComputerPlayer {
                 for (mage.game.permanent.Permanent perm : game.getBattlefield().getAllActivePermanents()) {
                     if (!perm.getControllerId().equals(this.playerId)) {
                         if (!firstOppPerm) oppFieldJson.append(", ");
-                        oppFieldJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\"}",
-                                perm.getId().toString(), perm.getName().replace("\"", "\\\"")));
+                        String denseFeatures = getDenseFeatures(perm, game);
+
+                        oppFieldJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", %s}",
+                                perm.getId().toString(), perm.getName().replace("\"", "\\\""), denseFeatures));
                         firstOppPerm = false;
                     }
                 }
                 oppFieldJson.append("]");
 
-                // NEW: THE STACK (What are we responding to?)
+                // THE STACK (What are we responding to?)
                 StringBuilder stackJson = new StringBuilder("[");
                 boolean firstStack = true;
                 for (mage.game.stack.StackObject stackObj : game.getStack()) {
@@ -234,13 +266,37 @@ public class PythonAIPlayer2 extends ComputerPlayer {
                         }
                     } catch (Exception ex) { myPlayer.pass(game); }
 
+                } else if (response != null && response.startsWith("ACTIVATE:")) {
+                    String abilityIdStr = response.substring(9).trim();
+                    try {
+                        java.util.UUID abilityId = java.util.UUID.fromString(abilityIdStr);
+                        boolean activated = false;
+
+                        // Find the matching permanent and ability
+                        for (mage.game.permanent.Permanent perm : game.getBattlefield().getAllActivePermanents(this.playerId)) {
+                            for (mage.abilities.Ability ab : perm.getAbilities(game)) {
+                                if (ab.getId().equals(abilityId)) {
+                                    if (myPlayer.activateAbility((mage.abilities.ActivatedAbility) ab, game)) {
+                                        activated = true;
+                                    }
+                                    break;
+                                }
+                            }
+                            if (activated) break;
+                        }
+                        if (activated) return true;
+                        else myPlayer.pass(game);
+                    } catch (Exception ex) { myPlayer.pass(game); }
+
                 } else if (response != null && response.equals("PASS")) {
                     myPlayer.pass(game);
                     try { Thread.sleep(50); } catch (Exception ignore) {}
                     return false;
                 }
             } else { socket.close(); }
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            System.err.println("PRIORITY SOCKET ERROR: " + e.getMessage());
+        }
 
         try { Thread.sleep(50); } catch (Exception ignore) {}
         return false;
@@ -275,8 +331,10 @@ public class PythonAIPlayer2 extends ComputerPlayer {
                     if (perm.isCreature(game) && perm.canAttack(null, game)) {
                         if (!firstAttacker) attackersJson.append(", ");
                         String safeName = perm.getName().replace("\"", "\\\"");
-                        attackersJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"power\": %d}",
-                                perm.getId().toString(), safeName, perm.getPower().getValue()));
+                        String denseFeatures = getDenseFeatures(perm, game);
+
+                        attackersJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", %s}",
+                                perm.getId().toString(), safeName, denseFeatures));
                         firstAttacker = false;
                     }
                 }
@@ -337,8 +395,10 @@ public class PythonAIPlayer2 extends ComputerPlayer {
                         if (attacker != null) {
                             if (!firstAtt) attackersJson.append(", ");
                             String safeName = attacker.getName().replace("\"", "\\\"");
-                            attackersJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"power\": %d, \"toughness\": %d}",
-                                    attacker.getId().toString(), safeName, attacker.getPower().getValue(), attacker.getToughness().getValue()));
+                            String denseFeatures = getDenseFeatures(attacker, game);
+
+                            attackersJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", %s}",
+                                    attacker.getId().toString(), safeName, denseFeatures));
                             firstAtt = false;
                         }
                     }
@@ -353,8 +413,10 @@ public class PythonAIPlayer2 extends ComputerPlayer {
                     if (perm.isCreature(game) && !perm.isTapped()) {
                         if (!firstBlk) blockersJson.append(", ");
                         String safeName = perm.getName().replace("\"", "\\\"");
-                        blockersJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"power\": %d, \"toughness\": %d}",
-                                perm.getId().toString(), safeName, perm.getPower().getValue(), perm.getToughness().getValue()));
+                        String denseFeatures = getDenseFeatures(perm, game);
+
+                        blockersJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", %s}",
+                                perm.getId().toString(), safeName, denseFeatures));
                         firstBlk = false;
                     }
                 }
@@ -394,4 +456,163 @@ public class PythonAIPlayer2 extends ComputerPlayer {
             }
         } catch (Exception e) {}
     }
+
+    // ==========================================================
+    // REINFORCEMENT LEARNING REWARD HOOKS
+    // ==========================================================
+    @Override
+    public void won(mage.game.Game game) {
+        super.won(game);
+        // PASS THE GAME PARAMETER
+        sendTerminalState("WIN", game);
+    }
+
+    @Override
+    public void lost(mage.game.Game game) {
+        super.lost(game);
+        // PASS THE GAME PARAMETER
+        sendTerminalState("LOSS", game);
+    }
+
+    // UPDATE THE SIGNATURE TO EXPECT THE GAME OBJECT
+    private void sendTerminalState(String result, mage.game.Game game) {
+        try {
+            java.net.Socket socket = new java.net.Socket("127.0.0.1", 5001);
+            java.io.PrintWriter out = new java.io.PrintWriter(socket.getOutputStream(), true);
+            java.io.BufferedReader in = new java.io.BufferedReader(new java.io.InputStreamReader(socket.getInputStream()));
+
+            // 1. Get our life total safely
+            mage.players.Player myPlayer = game != null ? game.getPlayer(this.playerId) : null;
+            int myLife = myPlayer != null ? myPlayer.getLife() : 0;
+
+            // 2. Get opponent's life total (grabs the first opponent it finds)
+            int oppLife = 0;
+            if (game != null) {
+                for (java.util.UUID oppId : game.getOpponents(this.playerId)) {
+                    mage.players.Player opp = game.getPlayer(oppId);
+                    if (opp != null) {
+                        oppLife = opp.getLife();
+                        break;
+                    }
+                }
+            }
+
+            // 3. Get total turns
+            int turns = game != null ? game.getTurnNum() : 0;
+
+            // 4. Build the expanded JSON payload
+            String json = String.format(
+                    "{\"request_type\": \"match_over\", \"result\": \"%s\", \"my_life\": %d, \"opp_life\": %d, \"total_turns\": %d}",
+                    result, myLife, oppLife, turns
+            );
+
+            out.println(json);
+
+            in.readLine();
+            socket.close();
+        } catch (Exception e) {
+            System.err.println("TERMINAL SOCKET ERROR: " + e.getMessage());
+        }
+    }
+
+    // ==========================================================
+    // DENSE FEATURE EXTRACTOR (NLP & STATS)
+    // ==========================================================
+    private String getDenseFeatures(mage.cards.Card card, mage.game.Game game) {
+        int cmc = card.getManaValue();
+        int power = card.isCreature(game) ? card.getPower().getValue() : 0;
+        int toughness = card.isCreature(game) ? card.getToughness().getValue() : 0;
+
+        // Extract Oracle text SAFELY (Basic lands and tokens sometimes return null rules!)
+        java.util.List<String> rules = card.getRules(game);
+        String rulesText = (rules != null) ? String.join(" ", rules).toLowerCase() : "";
+
+        // Combat Keywords
+        int isFlying = rulesText.contains("flying") ? 1 : 0;
+        int isTrample = rulesText.contains("trample") ? 1 : 0;
+        int isDeathtouch = rulesText.contains("deathtouch") ? 1 : 0;
+        int isHaste = rulesText.contains("haste") ? 1 : 0;
+        int isLifelink = rulesText.contains("lifelink") ? 1 : 0;
+        int isReach = rulesText.contains("reach") ? 1 : 0;
+        int isFirstStrike = rulesText.contains("first strike") ? 1 : 0;
+        int isDoubleStrike = rulesText.contains("double strike") ? 1 : 0;
+
+        // Spell Effects
+        int destroysCreature = (rulesText.contains("destroy target creature") || rulesText.contains("destroy target nonblack creature")) ? 1 : 0;
+        int drawsCards = (rulesText.contains("draw a card") || rulesText.contains("draw two cards")) ? 1 : 0;
+        int forcesDiscard = rulesText.contains("discards a card") ? 1 : 0;
+        int countersSpell = rulesText.contains("counter target spell") ? 1 : 0;
+        int dealsDamage = (rulesText.contains("deals damage to any target") || rulesText.contains("deals 3 damage")) ? 1 : 0;
+
+        // Return as a comma-separated list of JSON keys
+        return String.format(
+                "\"cmc\": %d, \"power\": %d, \"toughness\": %d, \"is_flying\": %d, \"is_trample\": %d, \"is_deathtouch\": %d, \"is_haste\": %d, \"is_lifelink\": %d, \"is_reach\": %d, \"is_first_strike\": %d, \"is_double_strike\": %d, \"destroys_creature\": %d, \"draws_cards\": %d, \"forces_discard\": %d, \"counters_spell\": %d, \"deals_direct_damage\": %d",
+                cmc, power, toughness, isFlying, isTrample, isDeathtouch, isHaste, isLifelink, isReach, isFirstStrike, isDoubleStrike, destroysCreature, drawsCards, forcesDiscard, countersSpell, dealsDamage
+        );
+    }
+
+    // ========================================================
+    // 4. LONDON MULLIGAN (Card Selection Hook)
+    // ========================================================
+    @Override
+    public boolean choose(mage.constants.Outcome outcome, mage.target.Target target, mage.abilities.Ability source, mage.game.Game game) {
+
+        String message = target.getMessage(game);
+
+        // THE FIX: Check if the game is asking us to put a card from our hand on the bottom of the library
+        boolean isBottomChoice = target.getZone() == mage.constants.Zone.HAND
+                && message != null
+                && message.toLowerCase().contains("bottom");
+
+        if (isBottomChoice) {
+            try {
+                Socket socket = new Socket("127.0.0.1", 5001); // 5001 for NFSP Network
+                PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+                mage.players.Player myPlayer = game.getPlayer(this.playerId);
+
+                int numToBottom = target.getMaxNumberOfTargets();
+                if (numToBottom == 0) numToBottom = target.getMinNumberOfTargets();
+
+                // Build Hand JSON
+                StringBuilder handJson = new StringBuilder("[");
+                boolean firstCard = true;
+                for (mage.cards.Card card : myPlayer.getHand().getCards(game)) {
+                    if (!firstCard) handJson.append(", ");
+                    String safeName = card.getName().replace("\"", "\\\"");
+                    handJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\"}", card.getId().toString(), safeName));
+                    firstCard = false;
+                }
+                handJson.append("]");
+
+                // Send a full state so the Python MTGStateEncoder doesn't crash on missing keys
+                String gameStateJson = String.format("{\"request_type\": \"mulligan_bottom\", \"amount_to_bottom\": %d, \"my_hand\": %s, \"my_battlefield\": [], \"opp_battlefield\": [], \"stack\": []}",
+                        numToBottom, handJson.toString());
+                out.println(gameStateJson);
+
+                String response = in.readLine();
+                socket.close();
+
+                // Apply the Network's choices
+                if (response != null && response.startsWith("BOTTOM:")) {
+                    String payload = response.substring(7).trim();
+                    if (!payload.isEmpty()) {
+                        String[] cardIds = payload.split(",");
+                        for (String idStr : cardIds) {
+                            java.util.UUID cardId = java.util.UUID.fromString(idStr.trim());
+                            target.addTarget(cardId, source, game);
+                        }
+                        return true;
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("MULLIGAN SOCKET ERROR: " + e.getMessage());
+            }
+        }
+
+        // If it's a different type of choice or the socket fails, fall back to the default AI
+        return super.choose(outcome, target, source, game);
+    }
+    
 }

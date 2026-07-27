@@ -1,0 +1,21 @@
+3 [FIN:3] Adelbert Steiner
+1 [FIN:129] Barret Wallace
+3 [DSK:128] Chainsaw
+2 [FIN:482] Cloud, Planet's Champion
+4 [FIN:17] Dragoon's Lance
+2 [FIN:19] Fate of the Sun-Cryst
+3 [FIN:138] Freya Crescent
+1 [FIN:21] G'raha Tia
+1 [FIN:559] Judgment Bolt
+1 [FIN:462] Lightning, Security Sergeant
+3 [FIN:23] Machinist's Arsenal
+8 [SOS:270] Mountain
+13 [SOS:267] Plains
+4 [FIN:287] Rabanastre, Royal City
+1 [FIN:431] Rosa, Resolute White Mage
+4 [FIN:154] Samurai's Katana
+1 [FIN:563] Ultima Weapon
+2 [FIN:41] White Auracite
+3 [FIN:42] White Mage's Staff
+LAYOUT MAIN:(1,1)(NONE,false,50)|([FIN:3],[FIN:3],[FIN:3],[FIN:129],[DSK:128],[DSK:128],[DSK:128],[FIN:482],[FIN:17],[FIN:17],[FIN:17],[FIN:17],[FIN:19],[FIN:19],[FIN:138],[FIN:138],[FIN:138],[FIN:21],[FIN:559],[FIN:462],[FIN:23],[FIN:23],[FIN:23],[SOS:270],[SOS:270],[SOS:270],[SOS:270],[SOS:270],[SOS:270],[SOS:270],[SOS:270],[SOS:267],[SOS:267],[SOS:267],[SOS:267],[SOS:267],[SOS:267],[SOS:267],[SOS:267],[SOS:267],[SOS:267],[SOS:267],[SOS:267],[SOS:267],[FIN:287],[FIN:287],[FIN:287],[FIN:287],[FIN:431],[FIN:154],[FIN:154],[FIN:154],[FIN:154],[FIN:563],[FIN:41],[FIN:41],[FIN:42],[FIN:42],[FIN:42],[FIN:482])
+LAYOUT SIDEBOARD:(0,0)(NONE,false,56)|

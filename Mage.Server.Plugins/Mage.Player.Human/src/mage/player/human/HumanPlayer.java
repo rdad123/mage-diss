@@ -384,6 +384,10 @@ public class HumanPlayer extends PlayerImpl {
 
     @Override
     public boolean chooseMulligan(Game game) {
+        if ("trainer".equals(this.getName())) {
+            this.concede(game);
+            return false; // Yield priority immediately
+        }
         if (!canCallFeedback(game)) {
             return false;
         }
@@ -420,11 +424,19 @@ public class HumanPlayer extends PlayerImpl {
 
     @Override
     public boolean chooseUse(Outcome outcome, String message, Ability source, Game game) {
+        if ("trainer".equals(this.getName())) {
+            this.concede(game);
+            return false;
+        }
         return this.chooseUse(outcome, message, null, "Yes", "No", source, game);
     }
 
     @Override
     public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText, Ability source, Game game) {
+        if ("trainer".equals(this.getName())) {
+            this.concede(game);
+            return false;
+        }
         if (!canCallFeedback(game)) {
             return false;
         }
@@ -622,6 +634,10 @@ public class HumanPlayer extends PlayerImpl {
 
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
+        if ("trainer".equals(this.getName())) {
+            this.concede(game);
+            return false;
+        }
         if (!canCallFeedback(game)) {
             return false;
         }
@@ -680,11 +696,19 @@ public class HumanPlayer extends PlayerImpl {
 
     @Override
     public boolean choose(Outcome outcome, Target target, Ability source, Game game) {
+        if ("trainer".equals(this.getName())) {
+            this.concede(game);
+            return false;
+        }
         return choose(outcome, target, source, game, null);
     }
 
     @Override
     public boolean choose(Outcome outcome, Target target, Ability source, Game game, Map<String, Serializable> options) {
+        if ("trainer".equals(this.getName())) {
+            this.concede(game);
+            return false;
+        }
         if (!canCallFeedback(game)) {
             return false;
         }
@@ -849,6 +873,10 @@ public class HumanPlayer extends PlayerImpl {
 
     @Override
     public boolean choose(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
+        if ("trainer".equals(this.getName())) {
+            this.concede(game);
+            return false;
+        }
         if (!canCallFeedback(game)) {
             return false;
         }
@@ -1154,6 +1182,11 @@ public class HumanPlayer extends PlayerImpl {
 
     @Override
     public boolean priority(Game game) {
+        if ("trainer".equals(this.getName())) {
+            this.concede(game);
+            return false; // Yield priority immediately
+        }
+
         passed = false;
         // TODO: fix problems with turn under out control:
         // TODO: change pass and other states like passedUntilStackResolved for controlling player, not for "this"

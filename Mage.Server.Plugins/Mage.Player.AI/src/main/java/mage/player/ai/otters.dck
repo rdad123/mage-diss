@@ -1,0 +1,20 @@
+1 [BLB:204] Alania, Divergent Storm
+1 [BLB:379] Bria, Riptide Rogue
+2 [BLB:131] Coruscation Mage
+3 [WOE:226] Frolicking Familiar
+10 [SOS:268] Island
+1 [BLB:389] Mind Spring
+10 [SOS:270] Mountain
+4 [BLB:63] Otterball Antics
+3 [BLB:64] Pearl of Wisdom
+3 [BLB:147] Rabid Gnaw
+4 [WOE:376] Sleight of Hand
+3 [OTJ:233] Slick Sequence
+3 [MOM:166] Stoke the Flames
+3 [BLB:234] Stormcatch Mentor
+1 [BLB:75] Stormchaser's Talent
+4 [TDM:268] Swiftwater Cliffs
+2 [BLB:307] Thundertrap Trainer
+2 [BLB:308] Valley Floodcaller
+LAYOUT MAIN:(1,1)(NONE,false,50)|([BLB:204],[BLB:379],[BLB:131],[BLB:131],[WOE:226],[WOE:226],[WOE:226],[SOS:268],[SOS:268],[SOS:268],[SOS:268],[SOS:268],[SOS:268],[SOS:268],[SOS:268],[SOS:268],[SOS:268],[BLB:389],[SOS:270],[SOS:270],[SOS:270],[SOS:270],[SOS:270],[SOS:270],[SOS:270],[SOS:270],[SOS:270],[SOS:270],[BLB:63],[BLB:63],[BLB:63],[BLB:63],[BLB:64],[BLB:64],[BLB:64],[BLB:147],[BLB:147],[BLB:147],[WOE:376],[WOE:376],[WOE:376],[WOE:376],[OTJ:233],[OTJ:233],[OTJ:233],[MOM:166],[MOM:166],[MOM:166],[BLB:234],[BLB:234],[BLB:234],[BLB:75],[TDM:268],[TDM:268],[TDM:268],[TDM:268],[BLB:307],[BLB:307],[BLB:308],[BLB:308])
+LAYOUT SIDEBOARD:(0,0)(NONE,false,56)|

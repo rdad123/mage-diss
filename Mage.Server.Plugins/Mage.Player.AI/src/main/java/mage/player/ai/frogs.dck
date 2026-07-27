@@ -1,0 +1,19 @@
+4 [OTJ:267] Botanical Sanctum
+3 [LCI:410a] Cavern of Souls
+4 [BLB:303] Dour Port-Mage
+1 [TMC:67] Fabled Passage
+4 [SOS:271] Forest
+4 [BLB:52] Into the Flood Maw
+4 [SOS:268] Island
+4 [BLB:184] Mistbreath Elder
+4 [BLB:189] Polliwallop
+4 [BLB:229] Pond Prophet
+2 [MKM:227] Repulsive Mutation
+4 [WOE:261] Restless Vinestalk
+4 [BLB:74] Splash Portal
+4 [BLB:195] Sunshower Druid
+4 [BLB:199] Three Tree Scribe
+4 [BLB:202] Valley Mightcaller
+2 [DMU:261] Yavimaya Coast
+LAYOUT MAIN:(1,1)(NONE,false,50)|([OTJ:267],[OTJ:267],[OTJ:267],[OTJ:267],[LCI:410a],[LCI:410a],[LCI:410a],[BLB:303],[BLB:303],[BLB:303],[BLB:303],[TMC:67],[SOS:271],[SOS:271],[SOS:271],[SOS:271],[BLB:52],[BLB:52],[BLB:52],[BLB:52],[SOS:268],[SOS:268],[SOS:268],[SOS:268],[BLB:184],[BLB:184],[BLB:184],[BLB:184],[BLB:189],[BLB:189],[BLB:189],[BLB:189],[BLB:229],[BLB:229],[BLB:229],[BLB:229],[MKM:227],[MKM:227],[WOE:261],[WOE:261],[WOE:261],[WOE:261],[BLB:74],[BLB:74],[BLB:74],[BLB:74],[BLB:195],[BLB:195],[BLB:195],[BLB:195],[BLB:199],[BLB:199],[BLB:199],[BLB:199],[BLB:202],[BLB:202],[BLB:202],[BLB:202],[DMU:261],[DMU:261])
+LAYOUT SIDEBOARD:(0,0)(NONE,false,56)|

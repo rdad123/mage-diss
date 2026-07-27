@@ -81,6 +81,12 @@ public final class Main {
     private static final String defaultConfigPath = Paths.get("config", "config.xml").toString();
 
     public static final PluginClassLoader classLoader = new PluginClassLoader();
+    // ADD THESE FOUR LINES:
+    private static mage.server.managers.ManagerFactory globalFactory;
+
+    public static mage.server.managers.ManagerFactory getManagerFactory() {
+        return globalFactory;
+    }
     private static TransporterServer server;
 
     // Special test mode:
@@ -287,6 +293,7 @@ public final class Main {
         connection.setHost(config.getServerAddress());
         connection.setPort(config.getPort());
         final ManagerFactory managerFactory = new MainManagerFactory(config);
+        globalFactory = managerFactory;
         try {
             // Parameter: serializationtype => jboss
             InvokerLocator serverLocator = new InvokerLocator(connection.getURI());
