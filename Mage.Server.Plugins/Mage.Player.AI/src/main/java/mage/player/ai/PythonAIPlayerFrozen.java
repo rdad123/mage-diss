@@ -7,22 +7,35 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
-import java.util.Set;
-import java.util.UUID;
 
-public class PythonAIPlayerNFSP extends ComputerPlayer {
+public class PythonAIPlayerFrozen extends ComputerPlayer {
 
-    public PythonAIPlayerNFSP(String name, RangeOfInfluence range, int skill) {
+    // ========================================================
+    // NEW: Port variable for flexible instantiation
+    // ========================================================
+    private int port;
+
+    // Standard constructor (Safe for XMage GUI reflection, defaults to 8082)
+    public PythonAIPlayerFrozen(String name, RangeOfInfluence range, int skill) {
         super(name, range);
+        this.port = 8082;
     }
 
-    public PythonAIPlayerNFSP(final PythonAIPlayerNFSP player) {
+    // Overloaded programmatic constructor (For your self-play scripts)
+    public PythonAIPlayerFrozen(String name, RangeOfInfluence range, int skill, int port) {
+        super(name, range);
+        this.port = port;
+    }
+
+    // Copy constructor (Crucial: ensure the cloned player keeps the correct port)
+    public PythonAIPlayerFrozen(final PythonAIPlayerFrozen player) {
         super(player);
+        this.port = player.port;
     }
 
     @Override
-    public PythonAIPlayerNFSP copy() {
-        return new PythonAIPlayerNFSP(this);
+    public PythonAIPlayerFrozen copy() {
+        return new PythonAIPlayerFrozen(this);
     }
 
     // ========================================================
@@ -31,7 +44,7 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
     @Override
     public boolean chooseMulligan(Game game) {
         try {
-            Socket socket = new Socket("127.0.0.1", 5001);
+            Socket socket = new Socket("127.0.0.1", this.port);
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
@@ -60,18 +73,16 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
                 socket.close();
 
                 if (response != null && response.equals("MULLIGAN")) {
-                    System.out.println("DEBUG: Python decided to MULLIGAN.");
+                    System.out.println("DEBUG: Python Frozen on port " + this.port + " decided to MULLIGAN.");
                     return true;
                 } else if (response != null && response.equals("KEEP")) {
-                    System.out.println("DEBUG: Python decided to KEEP.");
+                    System.out.println("DEBUG: Python Frozen on port " + this.port + " decided to KEEP.");
                     return false;
                 }
             } else {
                 socket.close();
             }
-        } catch (Exception e) {
-            // Silently catch
-        }
+        } catch (Exception e) {}
         return false;
     }
 
@@ -81,7 +92,7 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
     @Override
     public boolean chooseUse(mage.constants.Outcome outcome, String message, String secondMessage, String trueText, String falseText, mage.abilities.Ability source, mage.game.Game game) {
         try {
-            Socket socket = new Socket("127.0.0.1", 5001);
+            Socket socket = new Socket("127.0.0.1", this.port);
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
@@ -94,10 +105,10 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
 
             if (response != null) {
                 if (response.equals("YES")) {
-                    System.out.println("DEBUG: Python chose YES for prompt.");
+                    System.out.println("DEBUG: Python Frozen (Port " + this.port + ") chose YES for prompt.");
                     return true;
                 } else if (response.equals("NO")) {
-                    System.out.println("DEBUG: Python chose NO for prompt.");
+                    System.out.println("DEBUG: Python Frozen (Port " + this.port + ") chose NO for prompt.");
                     return false;
                 }
             }
@@ -112,7 +123,7 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
     @Override
     public boolean priority(Game game) {
         try {
-            Socket socket = new Socket("127.0.0.1", 5001);
+            Socket socket = new Socket("127.0.0.1", this.port);
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             mage.players.Player myPlayer = game.getPlayer(this.playerId);
@@ -122,7 +133,6 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
                 boolean isMyTurn = game.isActivePlayer(this.playerId);
                 boolean isMainPhase = game.canPlaySorcery(this.playerId);
 
-                // Opponents
                 StringBuilder opponentsJson = new StringBuilder("[");
                 boolean firstOpponent = true;
                 for (java.util.UUID currentId : game.getPlayerList()) {
@@ -138,7 +148,6 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
                 }
                 opponentsJson.append("]");
 
-                // Get Hand
                 StringBuilder handJson = new StringBuilder("[");
                 boolean firstCard = true;
                 for (mage.cards.Card card : myPlayer.getHand().getCards(game)) {
@@ -161,7 +170,6 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
                 }
                 handJson.append("]");
 
-                // My Battlefield
                 StringBuilder fieldJson = new StringBuilder("[");
                 boolean firstPerm = true;
                 for (mage.game.permanent.Permanent perm : game.getBattlefield().getAllActivePermanents(this.playerId)) {
@@ -194,31 +202,20 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
                 }
                 fieldJson.append("]");
 
-                // Opponent Battlefields (Separated by Player ID)
-                StringBuilder oppBattlefieldsJson = new StringBuilder("{");
-                boolean firstOpponentField = true;
+                StringBuilder oppFieldJson = new StringBuilder("[");
+                boolean firstOppPerm = true;
+                for (mage.game.permanent.Permanent perm : game.getBattlefield().getAllActivePermanents()) {
+                    if (!perm.getControllerId().equals(this.playerId)) {
+                        if (!firstOppPerm) oppFieldJson.append(", ");
+                        String denseFeatures = getDenseFeatures(perm, game);
 
-                for (java.util.UUID currentId : game.getPlayerList()) {
-                    if (!currentId.equals(this.playerId)) {
-                        if (!firstOpponentField) oppBattlefieldsJson.append(", ");
-                        oppBattlefieldsJson.append(String.format("\"%s\": [", currentId.toString()));
-
-                        boolean firstOppPerm = true;
-                        for (mage.game.permanent.Permanent perm : game.getBattlefield().getAllActivePermanents(currentId)) {
-                            if (!firstOppPerm) oppBattlefieldsJson.append(", ");
-                            String denseFeatures = getDenseFeatures(perm, game);
-
-                            oppBattlefieldsJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", %s}",
-                                    perm.getId().toString(), perm.getName().replace("\"", "\\\""), denseFeatures));
-                            firstOppPerm = false;
-                        }
-                        oppBattlefieldsJson.append("]");
-                        firstOpponentField = false;
+                        oppFieldJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", %s}",
+                                perm.getId().toString(), perm.getName().replace("\"", "\\\""), denseFeatures));
+                        firstOppPerm = false;
                     }
                 }
-                oppBattlefieldsJson.append("}");
+                oppFieldJson.append("]");
 
-                // THE STACK
                 StringBuilder stackJson = new StringBuilder("[");
                 boolean firstStack = true;
                 for (mage.game.stack.StackObject stackObj : game.getStack()) {
@@ -229,14 +226,13 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
                 }
                 stackJson.append("]");
 
-                String gameStateJson = String.format("{\"request_type\": \"priority\", \"turn\": %d, \"is_my_turn\": %b, \"is_main_phase\": %b, \"my_hand\": %s, \"my_battlefield\": %s, \"opponents_battlefields\": %s, \"stack\": %s}",
-                        turnNumber, isMyTurn, isMainPhase, handJson.toString(), fieldJson.toString(), oppBattlefieldsJson.toString(), stackJson.toString());
+                String gameStateJson = String.format("{\"request_type\": \"priority\", \"turn\": %d, \"is_my_turn\": %b, \"is_main_phase\": %b, \"my_hand\": %s, \"my_battlefield\": %s, \"opp_battlefield\": %s, \"stack\": %s}",
+                        turnNumber, isMyTurn, isMainPhase, handJson.toString(), fieldJson.toString(), oppFieldJson.toString(), stackJson.toString());
                 out.println(gameStateJson);
 
                 String response = in.readLine();
                 socket.close();
 
-                // PLAYING/CASTING LOGIC
                 if (response != null && response.startsWith("PLAY:")) {
                     String idString = response.substring(5).trim();
                     try {
@@ -289,7 +285,7 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
                 }
             } else { socket.close(); }
         } catch (Exception e) {
-            System.err.println("PRIORITY SOCKET ERROR: " + e.getMessage());
+            System.err.println("FROZEN PRIORITY SOCKET ERROR (Port " + this.port + "): " + e.getMessage());
         }
 
         try { Thread.sleep(50); } catch (Exception ignore) {}
@@ -299,7 +295,7 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
     @Override
     public void selectAttackers(Game game, java.util.UUID attackingPlayerId) {
         try {
-            Socket socket = new Socket("127.0.0.1", 5001);
+            Socket socket = new Socket("127.0.0.1", this.port);
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
@@ -350,12 +346,12 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
                                 java.util.UUID attackerId = java.util.UUID.fromString(parts[0].trim());
                                 java.util.UUID defenderId = java.util.UUID.fromString(parts[1].trim());
                                 myPlayer.declareAttacker(attackerId, defenderId, game, false);
-                                System.out.println("DEBUG: Declaring attacker ID " + attackerId);
+                                System.out.println("DEBUG: Frozen (Port " + this.port + ") Declaring attacker ID " + attackerId);
                             }
                         }
                     }
                 } else if (response != null && response.equals("PASS")) {
-                    System.out.println("DEBUG: Python chose not to attack.");
+                    System.out.println("DEBUG: Python Frozen (Port " + this.port + ") chose not to attack.");
                 }
             } else {
                 socket.close();
@@ -366,7 +362,7 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
     @Override
     public void selectBlockers(mage.abilities.Ability source, Game game, java.util.UUID defendingPlayerId) {
         try {
-            Socket socket = new Socket("127.0.0.1", 5001);
+            Socket socket = new Socket("127.0.0.1", this.port);
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
@@ -426,12 +422,12 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
                                 java.util.UUID attackerId = java.util.UUID.fromString(parts[1].trim());
 
                                 myPlayer.declareBlocker(this.playerId, blockerId, attackerId, game);
-                                System.out.println("DEBUG: Declaring blocker " + blockerId + " against " + attackerId);
+                                System.out.println("DEBUG: Frozen (Port " + this.port + ") Declaring blocker " + blockerId + " against " + attackerId);
                             }
                         }
                     }
                 } else if (response != null && response.equals("PASS")) {
-                    System.out.println("DEBUG: Python chose to take the damage.");
+                    System.out.println("DEBUG: Python Frozen (Port " + this.port + ") chose to take the damage.");
                 }
             } else {
                 socket.close();
@@ -439,9 +435,6 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
         } catch (Exception e) {}
     }
 
-    // ==========================================================
-    // REINFORCEMENT LEARNING REWARD HOOKS
-    // ==========================================================
     @Override
     public void won(mage.game.Game game) {
         super.won(game);
@@ -456,7 +449,7 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
 
     private void sendTerminalState(String result, mage.game.Game game) {
         try {
-            java.net.Socket socket = new java.net.Socket("127.0.0.1", 5001);
+            java.net.Socket socket = new java.net.Socket("127.0.0.1", this.port);
             java.io.PrintWriter out = new java.io.PrintWriter(socket.getOutputStream(), true);
             java.io.BufferedReader in = new java.io.BufferedReader(new java.io.InputStreamReader(socket.getInputStream()));
 
@@ -464,23 +457,12 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
             int myLife = myPlayer != null ? myPlayer.getLife() : 0;
 
             int oppLife = 0;
-            int oppCreaturesInGrave = 0;
-
             if (game != null) {
                 for (java.util.UUID oppId : game.getOpponents(this.playerId)) {
                     mage.players.Player opp = game.getPlayer(oppId);
                     if (opp != null) {
-                        // Captures the first opponent's life total for the metric
-                        if (oppLife == 0) {
-                            oppLife = opp.getLife();
-                        }
-
-                        // Scans the graveyard and counts destroyed creatures
-                        for (mage.cards.Card card : opp.getGraveyard().getCards(game)) {
-                            if (card.isCreature(game)) {
-                                oppCreaturesInGrave++;
-                            }
-                        }
+                        oppLife = opp.getLife();
+                        break;
                     }
                 }
             }
@@ -488,28 +470,22 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
             int turns = game != null ? game.getTurnNum() : 0;
 
             String json = String.format(
-                    "{\"request_type\": \"match_over\", \"result\": \"%s\", \"my_life\": %d, \"opp_life\": %d, \"total_turns\": %d, \"creatures_destroyed_by_me\": %d}",
-                    result, myLife, oppLife, turns, oppCreaturesInGrave
+                    "{\"request_type\": \"match_over\", \"result\": \"%s\", \"my_life\": %d, \"opp_life\": %d, \"total_turns\": %d}",
+                    result, myLife, oppLife, turns
             );
 
             out.println(json);
-
             in.readLine();
             socket.close();
         } catch (Exception e) {
-            System.err.println("TERMINAL SOCKET ERROR: " + e.getMessage());
+            System.err.println("FROZEN TERMINAL SOCKET ERROR (Port " + this.port + "): " + e.getMessage());
         }
     }
 
-    // ==========================================================
-    // DENSE FEATURE EXTRACTOR
-    // ==========================================================
     private String getDenseFeatures(mage.cards.Card card, mage.game.Game game) {
         int cmc = card.getManaValue();
-        int isCreature = card.isCreature(game) ? 1 : 0;
         int power = card.isCreature(game) ? card.getPower().getValue() : 0;
         int toughness = card.isCreature(game) ? card.getToughness().getValue() : 0;
-        String colors = card.getColor(game) != null ? card.getColor(game).toString() : "";
 
         java.util.List<String> rules = card.getRules(game);
         String rulesText = (rules != null) ? String.join(" ", rules).toLowerCase() : "";
@@ -530,17 +506,13 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
         int dealsDamage = (rulesText.contains("deals damage to any target") || rulesText.contains("deals 3 damage")) ? 1 : 0;
 
         return String.format(
-                "\"is_creature\": %d, \"colors\": \"%s\", \"cmc\": %d, \"power\": %d, \"toughness\": %d, \"is_flying\": %d, \"is_trample\": %d, \"is_deathtouch\": %d, \"is_haste\": %d, \"is_lifelink\": %d, \"is_reach\": %d, \"is_first_strike\": %d, \"is_double_strike\": %d, \"destroys_creature\": %d, \"draws_cards\": %d, \"forces_discard\": %d, \"counters_spell\": %d, \"deals_direct_damage\": %d",
-                isCreature, colors, cmc, power, toughness, isFlying, isTrample, isDeathtouch, isHaste, isLifelink, isReach, isFirstStrike, isDoubleStrike, destroysCreature, drawsCards, forcesDiscard, countersSpell, dealsDamage
+                "\"cmc\": %d, \"power\": %d, \"toughness\": %d, \"is_flying\": %d, \"is_trample\": %d, \"is_deathtouch\": %d, \"is_haste\": %d, \"is_lifelink\": %d, \"is_reach\": %d, \"is_first_strike\": %d, \"is_double_strike\": %d, \"destroys_creature\": %d, \"draws_cards\": %d, \"forces_discard\": %d, \"counters_spell\": %d, \"deals_direct_damage\": %d",
+                cmc, power, toughness, isFlying, isTrample, isDeathtouch, isHaste, isLifelink, isReach, isFirstStrike, isDoubleStrike, destroysCreature, drawsCards, forcesDiscard, countersSpell, dealsDamage
         );
     }
 
-    // ========================================================
-    // 4. LONDON MULLIGAN
-    // ========================================================
     @Override
     public boolean choose(mage.constants.Outcome outcome, mage.target.Target target, mage.abilities.Ability source, mage.game.Game game) {
-
         String message = target.getMessage(game);
 
         boolean isBottomChoice = target.getZone() == mage.constants.Zone.HAND
@@ -549,7 +521,7 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
 
         if (isBottomChoice) {
             try {
-                Socket socket = new Socket("127.0.0.1", 5001);
+                Socket socket = new Socket("127.0.0.1", this.port);
                 PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
                 BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
@@ -568,7 +540,7 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
                 }
                 handJson.append("]");
 
-                String gameStateJson = String.format("{\"request_type\": \"mulligan_bottom\", \"amount_to_bottom\": %d, \"my_hand\": %s, \"my_battlefield\": [], \"opponents_battlefields\": {}, \"stack\": []}",
+                String gameStateJson = String.format("{\"request_type\": \"mulligan_bottom\", \"amount_to_bottom\": %d, \"my_hand\": %s, \"my_battlefield\": [], \"opp_battlefield\": [], \"stack\": []}",
                         numToBottom, handJson.toString());
                 out.println(gameStateJson);
 
@@ -587,7 +559,7 @@ public class PythonAIPlayerNFSP extends ComputerPlayer {
                     }
                 }
             } catch (Exception e) {
-                System.err.println("MULLIGAN SOCKET ERROR: " + e.getMessage());
+                System.err.println("FROZEN MULLIGAN SOCKET ERROR (Port " + this.port + "): " + e.getMessage());
             }
         }
 

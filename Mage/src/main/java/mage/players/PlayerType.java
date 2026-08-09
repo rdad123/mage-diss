@@ -13,7 +13,8 @@ public enum PlayerType {
     COMPUTER_MONTE_CARLO("Computer - monte carlo", true, true),
     COMPUTER_MAD("Computer - mad", true, true) ,
     COMPUTER_PYTHON_AI("Computer - Python API",true, true),
-    COMPUTER_NFSP("Computer - NFSP", true, true);
+    COMPUTER_NFSP("Computer - NFSP", true, true),
+    COMPUTER_PYTHON_FROZEN("Computer - Frozen", true, true);
     final String description;
     final boolean isAI;
     final boolean isWorkablePlayer; // false for draft bots cause it does nothing in real game and just loose a game
