@@ -12,6 +12,9 @@ import java.util.UUID;
 
 public class PythonAIPlayer extends ComputerPlayer {
 
+    /**
+     * Instantiates the baseline player with standard engine parameters.
+     */
     public PythonAIPlayer(String name, RangeOfInfluence range, int skill) {
         super(name, range);
         System.out.println("\n=================================");
@@ -19,6 +22,9 @@ public class PythonAIPlayer extends ComputerPlayer {
         System.out.println("=================================\n");
     }
 
+    /**
+     * Creates a deep copy of the player object.
+     */
     public PythonAIPlayer(final PythonAIPlayer player) {
         super(player);
         System.out.println("\n=================================");
@@ -28,13 +34,12 @@ public class PythonAIPlayer extends ComputerPlayer {
 
     @Override
     public PythonAIPlayer copy() {
-
         return new PythonAIPlayer(this);
     }
 
-    // ========================================================
-    // 1. MULLIGAN PHASE (Renamed to match parent class exactly!)
-    // ========================================================
+    /**
+     * Serialises the opening hand and queries the Python server to autonomously accept or mulligan.
+     */
     @Override
     public boolean chooseMulligan(Game game) {
         System.out.println("PYTHON BOT: Auto-keeping opening hand!");
@@ -52,7 +57,6 @@ public class PythonAIPlayer extends ComputerPlayer {
                     if (!firstCard) handJson.append(", ");
                     String safeName = card.getName().replace("\"", "\\\"");
 
-                    // NEW: Tell Python if it's a land during the mulligan phase!
                     boolean isLand = card.isLand(game);
 
                     handJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"is_land\": %b}",
@@ -78,17 +82,13 @@ public class PythonAIPlayer extends ComputerPlayer {
                 socket.close();
             }
         } catch (Exception e) {
-            // Silently catch
         }
         return false;
     }
 
-    // ========================================================
-    // 2. YES/NO TRIGGERS (New Phase!)
-    // ========================================================
-    // ==========================================================
-    // NEW HOOK: Handle Optional Yes/No Triggers (e.g., "You may...")
-    // ==========================================================
+    /**
+     * Handles optional game engine triggers by querying the Python server for a binary decision.
+     */
     @Override
     public boolean chooseUse(mage.constants.Outcome outcome, String message, String secondMessage, String trueText, String falseText, mage.abilities.Ability source, mage.game.Game game) {
         try {
@@ -96,7 +96,6 @@ public class PythonAIPlayer extends ComputerPlayer {
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-            // Send the prompt to Python
             String safeMessage = message != null ? message.replace("\"", "\\\"") : "";
             String json = String.format("{\"request_type\": \"choose_use\", \"message\": \"%s\"}", safeMessage);
             out.println(json);
@@ -118,9 +117,9 @@ public class PythonAIPlayer extends ComputerPlayer {
         return super.chooseUse(outcome, message, secondMessage, trueText, falseText, source, game);
     }
 
-    // ========================================================
-    // 3. PRIORITY (Now features "The Stack" for Instant Speed)
-    // ========================================================
+    /**
+     * Serialises the active game state into JSON and queries the Python server for main phase actions including playing lands or casting spells.
+     */
     @Override
     public boolean priority(Game game) {
         try {
@@ -134,7 +133,6 @@ public class PythonAIPlayer extends ComputerPlayer {
                 boolean isMyTurn = game.isActivePlayer(this.playerId);
                 boolean isMainPhase = game.canPlaySorcery(this.playerId);
 
-                // Opponents
                 StringBuilder opponentsJson = new StringBuilder("[");
                 boolean firstOpponent = true;
                 for (java.util.UUID currentId : game.getPlayerList()) {
@@ -150,7 +148,6 @@ public class PythonAIPlayer extends ComputerPlayer {
                 }
                 opponentsJson.append("]");
 
-                // Get Hand
                 StringBuilder handJson = new StringBuilder("[");
                 boolean firstCard = true;
                 for (mage.cards.Card card : myPlayer.getHand().getCards(game)) {
@@ -165,7 +162,7 @@ public class PythonAIPlayer extends ComputerPlayer {
                         }
                     }
                     int cmc = card.getManaValue();
-                    boolean isLand = card.isLand(game); // NEW FLAG
+                    boolean isLand = card.isLand(game);
 
                     handJson.append(String.format("{\"id\": \"%s\", \"name\": \"%s\", \"can_cast\": %b, \"cmc\": %d, \"needs_target\": %b, \"is_land\": %b}",
                             card.getId().toString(), safeName, canCast, cmc, needsTarget, isLand));
@@ -173,14 +170,12 @@ public class PythonAIPlayer extends ComputerPlayer {
                 }
                 handJson.append("]");
 
-                // My Battlefield
                 StringBuilder fieldJson = new StringBuilder("[");
                 boolean firstPerm = true;
                 for (mage.game.permanent.Permanent perm : game.getBattlefield().getAllActivePermanents(this.playerId)) {
                     if (!firstPerm) fieldJson.append(", ");
                     boolean isLand = perm.isLand(game);
 
-                    // --- Extract Activated Abilities ---
                     StringBuilder abilitiesJson = new StringBuilder("[");
                     boolean firstAb = true;
                     for (mage.abilities.Ability ability : perm.getAbilities(game)) {
@@ -206,7 +201,6 @@ public class PythonAIPlayer extends ComputerPlayer {
                 }
                 fieldJson.append("]");
 
-                // Opponent Battlefield
                 StringBuilder oppFieldJson = new StringBuilder("[");
                 boolean firstOppPerm = true;
                 for (mage.game.permanent.Permanent perm : game.getBattlefield().getAllActivePermanents()) {
@@ -219,7 +213,6 @@ public class PythonAIPlayer extends ComputerPlayer {
                 }
                 oppFieldJson.append("]");
 
-                // NEW: THE STACK (What are we responding to?)
                 StringBuilder stackJson = new StringBuilder("[");
                 boolean firstStack = true;
                 for (mage.game.stack.StackObject stackObj : game.getStack()) {
@@ -237,7 +230,6 @@ public class PythonAIPlayer extends ComputerPlayer {
                 String response = in.readLine();
                 socket.close();
 
-                // PLAYING/CASTING LOGIC
                 if (response != null && response.startsWith("PLAY:")) {
                     String idString = response.substring(5).trim();
                     try {
@@ -268,7 +260,6 @@ public class PythonAIPlayer extends ComputerPlayer {
                         java.util.UUID abilityId = java.util.UUID.fromString(abilityIdStr);
                         boolean activated = false;
 
-                        // Find the matching permanent and ability
                         for (mage.game.permanent.Permanent perm : game.getBattlefield().getAllActivePermanents(this.playerId)) {
                             for (mage.abilities.Ability ab : perm.getAbilities(game)) {
                                 if (ab.getId().equals(abilityId)) {
@@ -299,6 +290,10 @@ public class PythonAIPlayer extends ComputerPlayer {
         try { Thread.sleep(50); } catch (Exception ignore) {}
         return false;
     }
+
+    /**
+     * Compiles available creatures and queries the Python combat network to declare offensive attacks.
+     */
     @Override
     public void selectAttackers(Game game, java.util.UUID attackingPlayerId) {
         try {
@@ -309,7 +304,6 @@ public class PythonAIPlayer extends ComputerPlayer {
             mage.players.Player myPlayer = game.getPlayer(this.playerId);
 
             if (myPlayer != null) {
-                // 1. Get Opponents
                 StringBuilder opponentsJson = new StringBuilder("[");
                 boolean firstOpp = true;
                 for (java.util.UUID currentId : game.getPlayerList()) {
@@ -322,7 +316,6 @@ public class PythonAIPlayer extends ComputerPlayer {
                 }
                 opponentsJson.append("]");
 
-                // 2. Get the Army
                 StringBuilder attackersJson = new StringBuilder("[");
                 boolean firstAttacker = true;
                 for (mage.game.permanent.Permanent perm : game.getBattlefield().getAllActivePermanents(this.playerId)) {
@@ -336,16 +329,13 @@ public class PythonAIPlayer extends ComputerPlayer {
                 }
                 attackersJson.append("]");
 
-                // 3. Send Combat Payload
                 String gameStateJson = String.format("{\"request_type\": \"declare_attackers\", \"opponents\": %s, \"possible_attackers\": %s}",
                         opponentsJson.toString(), attackersJson.toString());
                 out.println(gameStateJson);
 
-                // 4. Wait for Python
                 String response = in.readLine();
                 socket.close();
 
-                // 5. Execute
                 if (response != null && response.startsWith("ATTACK:")) {
                     String payload = response.substring(7).trim();
                     if (!payload.isEmpty()) {
@@ -369,6 +359,9 @@ public class PythonAIPlayer extends ComputerPlayer {
         } catch (Exception e) {}
     }
 
+    /**
+     * Compiles incoming attackers and available blockers to query the Python combat network for defensive assignments.
+     */
     @Override
     public void selectBlockers(mage.abilities.Ability source, Game game, java.util.UUID defendingPlayerId) {
         try {
@@ -379,13 +372,11 @@ public class PythonAIPlayer extends ComputerPlayer {
             mage.players.Player myPlayer = game.getPlayer(this.playerId);
 
             if (myPlayer != null) {
-                // 1. Get Incoming Attackers (Only the ones aimed at US!)
                 StringBuilder attackersJson = new StringBuilder("[");
                 boolean firstAtt = true;
                 for (java.util.UUID attackerId : game.getCombat().getAttackers()) {
                     java.util.UUID targetId = game.getCombat().getDefenderId(attackerId);
 
-                    // Verify the creature is actually swinging at our bot
                     if (targetId != null && targetId.equals(this.playerId)) {
                         mage.game.permanent.Permanent attacker = game.getPermanent(attackerId);
                         if (attacker != null) {
@@ -399,11 +390,9 @@ public class PythonAIPlayer extends ComputerPlayer {
                 }
                 attackersJson.append("]");
 
-                // 2. Get Our Available Blockers
                 StringBuilder blockersJson = new StringBuilder("[");
                 boolean firstBlk = true;
                 for (mage.game.permanent.Permanent perm : game.getBattlefield().getAllActivePermanents(this.playerId)) {
-                    // A very basic check: If it's a creature and untapped, it can theoretically block
                     if (perm.isCreature(game) && !perm.isTapped()) {
                         if (!firstBlk) blockersJson.append(", ");
                         String safeName = perm.getName().replace("\"", "\\\"");
@@ -414,16 +403,13 @@ public class PythonAIPlayer extends ComputerPlayer {
                 }
                 blockersJson.append("]");
 
-                // 3. Send Combat Payload
                 String gameStateJson = String.format("{\"request_type\": \"declare_blockers\", \"incoming_attackers\": %s, \"possible_blockers\": %s}",
                         attackersJson.toString(), blockersJson.toString());
                 out.println(gameStateJson);
 
-                // 4. Wait for Python
                 String response = in.readLine();
                 socket.close();
 
-                // 5. Execute the Blocks!
                 if (response != null && response.startsWith("BLOCK:")) {
                     String payload = response.substring(6).trim();
                     if (!payload.isEmpty()) {
@@ -434,7 +420,6 @@ public class PythonAIPlayer extends ComputerPlayer {
                                 java.util.UUID blockerId = java.util.UUID.fromString(parts[0].trim());
                                 java.util.UUID attackerId = java.util.UUID.fromString(parts[1].trim());
 
-                                // Physically push our creature in front of the attacker
                                 myPlayer.declareBlocker(this.playerId, blockerId, attackerId, game);
                                 System.out.println("DEBUG: Declaring blocker " + blockerId + " against " + attackerId);
                             }

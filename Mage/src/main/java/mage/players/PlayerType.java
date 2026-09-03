@@ -14,7 +14,11 @@ public enum PlayerType {
     COMPUTER_MAD("Computer - mad", true, true) ,
     COMPUTER_PYTHON_AI("Computer - Python API",true, true),
     COMPUTER_NFSP("Computer - NFSP", true, true),
-    COMPUTER_PYTHON_FROZEN("Computer - Frozen", true, true);
+    COMPUTER_PYTHON_FROZEN("Computer - 725", true, true),
+    COMPUTER_PYTHON_FROZEN_2("Computer - 1350", true, true),
+    COMPUTER_PYTHON_FROZEN_3("Computer - 700", true, true),
+    COMPUTER_PYTHON_FROZEN_4("Computer - 1325", true, true),
+    COMPUTER_PYTHON_FROZEN_LEGACY("Computer - Frozen", true, true); // Dummy entry to fix the crash
     final String description;
     final boolean isAI;
     final boolean isWorkablePlayer; // false for draft bots cause it does nothing in real game and just loose a game

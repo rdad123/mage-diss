@@ -8,26 +8,33 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 
+/**
+ * A custom XMage computer player that delegates strategic decision making
+ * to an external Python neural network via a synchronous TCP socket connection.
+ */
 public class PythonAIPlayerFrozen extends ComputerPlayer {
 
-    // ========================================================
-    // NEW: Port variable for flexible instantiation
-    // ========================================================
     private int port;
 
-    // Standard constructor (Safe for XMage GUI reflection, defaults to 8082)
+    /**
+     * Instantiates the player with a default port for standard GUI reflection.
+     */
     public PythonAIPlayerFrozen(String name, RangeOfInfluence range, int skill) {
         super(name, range);
         this.port = 8082;
     }
 
-    // Overloaded programmatic constructor (For your self-play scripts)
+    /**
+     * Instantiates the player programmatically with a specific port assignment for multi agent evaluation.
+     */
     public PythonAIPlayerFrozen(String name, RangeOfInfluence range, int skill, int port) {
         super(name, range);
         this.port = port;
     }
 
-    // Copy constructor (Crucial: ensure the cloned player keeps the correct port)
+    /**
+     * Creates a deep copy of the player ensuring the specific socket port is retained.
+     */
     public PythonAIPlayerFrozen(final PythonAIPlayerFrozen player) {
         super(player);
         this.port = player.port;
@@ -38,9 +45,9 @@ public class PythonAIPlayerFrozen extends ComputerPlayer {
         return new PythonAIPlayerFrozen(this);
     }
 
-    // ========================================================
-    // 1. MULLIGAN PHASE
-    // ========================================================
+    /**
+     * Serialises the opening hand and queries the Python server to autonomously accept or mulligan.
+     */
     @Override
     public boolean chooseMulligan(Game game) {
         try {
@@ -86,9 +93,9 @@ public class PythonAIPlayerFrozen extends ComputerPlayer {
         return false;
     }
 
-    // ========================================================
-    // 2. YES/NO TRIGGERS
-    // ========================================================
+    /**
+     * Handles optional game engine triggers by automatically confirming them.
+     */
     @Override
     public boolean chooseUse(mage.constants.Outcome outcome, String message, String secondMessage, String trueText, String falseText, mage.abilities.Ability source, mage.game.Game game) {
         try {
@@ -117,9 +124,9 @@ public class PythonAIPlayerFrozen extends ComputerPlayer {
         return super.chooseUse(outcome, message, secondMessage, trueText, falseText, source, game);
     }
 
-    // ========================================================
-    // 3. PRIORITY
-    // ========================================================
+    /**
+     * Serialises the active game state into JSON and queries the Python server for main phase actions including playing lands or casting spells.
+     */
     @Override
     public boolean priority(Game game) {
         try {
@@ -292,6 +299,9 @@ public class PythonAIPlayerFrozen extends ComputerPlayer {
         return false;
     }
 
+    /**
+     * Compiles available creatures and queries the Python combat network to declare offensive attacks.
+     */
     @Override
     public void selectAttackers(Game game, java.util.UUID attackingPlayerId) {
         try {
@@ -359,6 +369,9 @@ public class PythonAIPlayerFrozen extends ComputerPlayer {
         } catch (Exception e) {}
     }
 
+    /**
+     * Compiles incoming attackers and available blockers to query the Python combat network for defensive assignments.
+     */
     @Override
     public void selectBlockers(mage.abilities.Ability source, Game game, java.util.UUID defendingPlayerId) {
         try {
@@ -435,18 +448,27 @@ public class PythonAIPlayerFrozen extends ComputerPlayer {
         } catch (Exception e) {}
     }
 
+    /**
+     * Triggers terminal state transmission to the Python server upon match victory.
+     */
     @Override
     public void won(mage.game.Game game) {
         super.won(game);
         sendTerminalState("WIN", game);
     }
 
+    /**
+     * Triggers terminal state transmission to the Python server upon match defeat.
+     */
     @Override
     public void lost(mage.game.Game game) {
         super.lost(game);
         sendTerminalState("LOSS", game);
     }
 
+    /**
+     * Packages final game metrics and match results into a JSON payload to finalise the evaluation loop.
+     */
     private void sendTerminalState(String result, mage.game.Game game) {
         try {
             java.net.Socket socket = new java.net.Socket("127.0.0.1", this.port);
@@ -482,6 +504,9 @@ public class PythonAIPlayerFrozen extends ComputerPlayer {
         }
     }
 
+    /**
+     * Extracts card attributes and keyword abilities into a dense numerical string for tensor encoding.
+     */
     private String getDenseFeatures(mage.cards.Card card, mage.game.Game game) {
         int cmc = card.getManaValue();
         int power = card.isCreature(game) ? card.getPower().getValue() : 0;
@@ -511,6 +536,9 @@ public class PythonAIPlayerFrozen extends ComputerPlayer {
         );
     }
 
+    /**
+     * Handles specific selection prompts including the London mulligan bottoming logic via the Python server.
+     */
     @Override
     public boolean choose(mage.constants.Outcome outcome, mage.target.Target target, mage.abilities.Ability source, mage.game.Game game) {
         String message = target.getMessage(game);

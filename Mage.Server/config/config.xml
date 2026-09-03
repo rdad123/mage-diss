@@ -70,6 +70,10 @@
         <playerType name="Computer - monte carlo" jar="mage-player-aimcts.jar" className="mage.player.ai.ComputerPlayerMCTS"/>
         <playerType name="Computer - Python API" jar="mage-player-ai-draft-bot.jar" className="mage.player.ai.PythonAIPlayer"/>
         <playerType name="Computer - NFSP" jar="mage-player-ai-draft-bot.jar" className="mage.player.ai.PythonAIPlayerNFSP"/>
+        <playerType name="Computer - 725" jar="mage-player-ai-draft-bot.jar" className="mage.player.ai.PythonAIPlayerFrozen"/>
+        <playerType name="Computer - 1350" jar="mage-player-ai-draft-bot.jar" className="mage.player.ai.PythonAIPlayerFrozen2"/>
+        <playerType name="Computer - 700" jar="mage-player-ai-draft-bot.jar" className="mage.player.ai.PythonAIPlayerFrozen3"/>
+        <playerType name="Computer - 1325" jar="mage-player-ai-draft-bot.jar" className="mage.player.ai.PythonAIPlayerFrozen4"/>
         <playerType name="Computer - Frozen" jar="mage-player-ai-draft-bot.jar" className="mage.player.ai.PythonAIPlayerFrozen"/>
         <playerType name="Computer - draftbot" jar="mage-player-ai-draft-bot.jar" className="mage.player.ai.ComputerDraftPlayer"/>
     </playerTypes>
